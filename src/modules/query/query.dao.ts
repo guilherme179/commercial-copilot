@@ -5,8 +5,8 @@ import type { Pool } from 'mysql2/promise';
 export class QueryDao {
   constructor(@Inject('MYSQL_POOL') private readonly db: Pool) {}
 
-  async findAllCustomers(): Promise<unknown[]> {
-    const [rows] = await this.db.execute('SELECT * FROM customers');
+  async executeQuery(sql: string): Promise<unknown[]> {
+    const [rows] = await this.db.query(sql);
     return rows as unknown[];
   }
 }
