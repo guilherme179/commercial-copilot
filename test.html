@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Copiloto Comercial</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
+    textarea { width: 100%; height: 80px; margin-bottom: 10px; padding: 8px; font-size: 14px; }
+    button { padding: 10px 24px; background: #0070f3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    button:disabled { background: #ccc; }
+    #response { margin-top: 24px; padding: 16px; background: #f5f5f5; border-radius: 8px; min-height: 100px; white-space: pre-wrap; font-size: 14px; line-height: 1.6; }
+    #sql { margin-top: 12px; padding: 12px; background: #1e1e1e; color: #9cdcfe; border-radius: 6px; font-family: monospace; font-size: 12px; display: none; }
+    label { font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <h2>🤖 Copiloto Comercial</h2>
+
+  <label>Pergunta</label>
+  <textarea id="question" placeholder="Quais são os últimos pedidos da minha carteira?"></textarea>
+
+  <label>Employee ID</label>
+  <input id="employeeId" value="1" style="padding:8px; margin-bottom:10px; display:block; width:100px"/>
+
+  <button id="btn" onclick="ask()">Perguntar</button>
+
+  <div id="response">A resposta aparecerá aqui...</div>
+  <div id="sql"></div>
+
+  <script>
+    function ask() {
+        const question = document.getElementById('question').value;
+        const employeeId = document.getElementById('employeeId').value;
+        const responseDiv = document.getElementById('response');
+        const btn = document.getElementById('btn');
+
+        responseDiv.textContent = '';
+        btn.disabled = true;
+        btn.textContent = 'Processando...';
+
+        const params = new URLSearchParams({ question, employeeId });
+        const url = `http://localhost:5510/query/question?${params}`;
+
+        const eventSource = new EventSource(url);
+
+        eventSource.onmessage = (event) => {
+        // event.data já vem parseado pelo browser
+        // o NestJS envia {"data": "token"} então:
+        try {
+            const parsed = JSON.parse(event.data);
+            responseDiv.textContent += parsed;
+        } catch {
+            // se não for JSON, usa direto
+            responseDiv.textContent += event.data;
+        }
+        };
+
+        eventSource.onerror = () => {
+        eventSource.close();
+        btn.disabled = false;
+        btn.textContent = 'Perguntar';
+        };
+    }
+    </script>
+</body>
+</html>
