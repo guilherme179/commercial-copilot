@@ -1,98 +1,213 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# 🤖 Commercial Copilot
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Copiloto comercial inteligente para gerentes de carteira.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+O sistema permite que gerentes façam perguntas em linguagem natural sobre sua carteira de clientes e recebam respostas em português, geradas com base em dados reais do banco de dados — sem precisar escrever SQL.
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 📐 Arquitetura proposta
 
-## Project setup
+O sistema foi desenhado para resolver os problemas do copiloto atual:
 
-```bash
-$ npm install
+| Problema atual | Solução proposta |
+|---|---|
+| Processamento sequencial e lento | Fila de entrada (RabbitMQ) desacopla as etapas |
+| Sem resiliência a falhas | Duas filas protegem entrada e saída |
+| SQL executado sem validação | Query Validator bloqueia operações destrutivas |
+| Sem observabilidade | UUID de correlação em todos os logs |
+| Respostas chegam só no final | Streaming SSE — tokens chegam em tempo real |
+| Cache inexistente | Cache semântico com Redis Vector Search + embeddings |
+
+### Fluxo principal
+
+```
+Gerente faz pergunta (linguagem natural)
+        ↓
+API Gateway — autenticação e rate limit
+        ↓
+Fila de entrada (RabbitMQ)
+        ↓
+Modelo de Embedding — pergunta → vetor numérico
+        ↓
+Redis Vector Search — busca SQL similar (threshold 95%)
+    ├── Cache hit  → injeta employeeId → Query Validator → Banco
+    └── Cache miss → LLM Interpretador → gera SQL
+        ↓
+Query Validator — só SELECT, LIMIT obrigatório, whitelist de tabelas
+        ↓
+MySQL Northwind (AWS RDS) — user_read_only
+        ↓
+Fila de resultados (RabbitMQ) — protege o compositor
+        ↓
+Compositor LLM + Streaming SSE
+        ↓
+Resposta em português, token a token, em tempo real
 ```
 
-## Compile and run the project
+### Por que duas filas?
 
-```bash
-# development
-$ npm run start
+A fila de entrada protege o sistema desde o início — se o LLM de interpretação falhar, a mensagem não se perde e é reprocessada. A fila de resultados protege o compositor — se ele falhar no meio do streaming, os dados do banco já estão salvos na mensagem e o reprocessamento começa só nessa etapa, não do zero.
 
-# watch mode
-$ npm run start:dev
+### Por que cache semântico e não cache tradicional?
 
-# production mode
-$ npm run start:prod
+Cache tradicional compara strings exatas. *"Quais meus clientes em atraso?"* e *"Me mostra quem tá devendo"* são strings diferentes mas têm a mesma intenção. O cache semântico transforma a pergunta em um vetor numérico via modelo de embedding e compara a distância matemática entre vetores — perguntas com significado parecido geram vetores próximos e resultam em cache hit. O que é cacheado é o **SQL template**, não o resultado — os dados sempre vêm frescos do banco.
+
+### Decisão sobre microsserviços
+
+A arquitetura proposta prevê serviços independentes (Embedding, Interpreter, Composer, QueryValidator). Na implementação atual, cada serviço foi implementado como um **módulo NestJS isolado**, com interfaces bem definidas entre eles. Essa separação permite que cada módulo seja extraído como microsserviço independente quando a demanda justificar — sem alterar as interfaces. Esta é uma decisão deliberada de pragmatismo: microsserviços têm custo operacional real e não fazem sentido antes da necessidade.
+
+---
+
+## 🗂️ Estrutura do projeto
+
+```
+src/
+├── common/
+│   ├── database/           # Pool de conexão MySQL
+│   ├── interceptors/       # Sentry interceptor
+│   ├── monitoring/         # Configuração de monitoramento
+│   └── pipes/              # ZodValidationPipe
+│
+└── modules/
+    ├── interpreter/        # Geração de SQL via LLM
+    │   ├── interpreter.dao.ts      # Busca DDL do banco (onModuleInit)
+    │   └── interpreter.service.ts  # Prompt + chamada ao LLM
+    │
+    ├── query-validator/    # Validação do SQL gerado
+    │   └── query-validator.service.ts
+    │
+    ├── composer/           # Composição da resposta com streaming
+    │   └── composer.service.ts
+    │
+    ├── cache/              # Cache semântico (scaffolded)
+    │   └── cache.service.ts
+    │
+    └── query/              # Orquestrador do fluxo principal
+        ├── query.controller.ts     # SSE endpoint GET /query/question
+        ├── query.service.ts        # Orquestra todos os módulos
+        ├── query.dao.ts            # Executa SQL no banco
+        └── dto/
+            └── post-question.dto.ts
 ```
 
-## Run tests
+---
+
+## ⚙️ Como rodar localmente
+
+### Pré-requisitos
+
+- Node.js 18+
+- [LM Studio](https://lmstudio.ai/) com o modelo `qwen2.5-coder-14b` carregado
+- Acesso ao banco Northwind (credenciais no `.env`)
+
+### Instalação
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+git clone <repo-url>
+cd commercial-copilot
+npm install
 ```
 
-## Deployment
+### Variáveis de ambiente
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Crie um arquivo `.env` na raiz do projeto:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+```env
+# LLM — aponta para o LM Studio local
+LLM_BASE_URL=http://localhost:1234/v1
+LLM_MODEL=qwen2.5-coder-14b
+
+# Em produção, substitua pelas variáveis do Claude (Anthropic):
+# LLM_BASE_URL=https://api.anthropic.com/v1
+# LLM_MODEL=claude-sonnet-4-20250514
+
+# Banco de dados Northwind
+DB_HOST=seu_host
+DB_PORT=sua_porta
+DB_USER=seu_usuario
+DB_PASSWORD=sua_senha
+DB_NAME=seu_banco
+```
+
+### Rodando o projeto
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# desenvolvimento
+npm run start:dev
+
+# produção
+npm run build
+npm run start:prod
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Testando via browser
 
-## Resources
+Abra o arquivo `test.html` na raiz do projeto diretamente no navegador. Ele se conecta ao servidor via SSE e exibe a resposta em tempo real conforme os tokens chegam.
 
-Check out a few resources that may come in handy when working with NestJS:
+### Testando via curl
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```bash
+curl.exe -X GET "http://localhost:5510/query/question?question=Quais+são+os+últimos+pedidos+da+minha+carteira?&employeeId=1" -N
+```
 
-## Support
+---
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+## 🔒 Segurança
 
-## Stay in touch
+O `QueryValidatorService` valida todo SQL gerado pelo LLM antes de executar no banco:
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+- Apenas `SELECT` é permitido — qualquer outra operação é bloqueada
+- `LIMIT` é obrigatório em todas as queries
+- Operações destrutivas são explicitamente bloqueadas: `DROP`, `DELETE`, `UPDATE`, `INSERT`, `TRUNCATE`, `ALTER`, `CREATE`, `REPLACE`
+- A conexão com o banco usa usuário `read_only` — impossível escrever mesmo que o validator falhe
 
-## License
+Isso resolve o principal risco de segurança identificado no sistema atual: SQL injection via LLM.
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+---
+
+## 🚧 O que foi simplificado
+
+**Cache semântico** — o módulo está scaffolded mas não implementado. Em produção seria Redis Vector Search com embeddings via `text-embedding-3-small` (OpenAI). O SQL template seria cacheado por similaridade semântica (threshold 95%), não por string exata — permitindo que *"quais meus clientes em atraso?"* e *"me mostra quem tá devendo"* resultem em cache hit.
+
+**Fila assíncrona** — RabbitMQ foi omitido da implementação. O fluxo atual é síncrono dentro do request. Em produção, a fila seria fundamental para desacoplar o LLM do Gateway e garantir resiliência em caso de falha.
+
+**Autenticação** — o endpoint não exige autenticação real. Em produção, o API Gateway validaria JWT e o `employeeId` seria extraído do token, não passado pelo cliente.
+
+**Microsserviços** — implementado como módulos NestJS isolados. A separação de responsabilidades já está definida para extração futura.
+
+---
+
+## 🔭 Como evoluiria em produção
+
+1. **Cache semântico** com Redis Vector Search + embeddings — elimina chamadas redundantes ao LLM
+2. **RabbitMQ** para desacoplar entrada e processamento — resiliência e escalonamento independente
+3. **Kubernetes** para orquestrar os containers — auto-scaling do LLM sob demanda
+4. **Autenticação JWT** no Gateway — `employeeId` extraído do token, não do cliente
+5. **LLM em produção** — substituir LM Studio pelo Claude Sonnet via Anthropic API, alterando apenas variáveis de ambiente
+6. **Monitoramento** — Prometheus + Grafana para métricas de latência, taxa de cache hit e erros por etapa
+
+---
+
+## 🛠️ Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Framework | NestJS + TypeScript |
+| LLM (local) | Qwen 2.5 Coder 14B via LM Studio |
+| LLM (produção) | Claude Sonnet — Anthropic |
+| Banco de dados | MySQL — Northwind (AWS RDS) |
+| Streaming | SSE (Server-Sent Events) via RxJS |
+| Validação | Zod |
+| Cache (planejado) | Redis Vector Search |
+| Mensageria (planejado) | RabbitMQ |
+| Observabilidade (planejado) | Prometheus + Grafana |
+
+---
+
+## 👤 Autor
+
+**Guilherme Souza Santos**
+Backend Engineer — Node.js | TypeScript | NestJS
+
+[LinkedIn](https://linkedin.com/in/guilherme-souza-414472219) · [Portfolio](https://guilhermedev.website)
