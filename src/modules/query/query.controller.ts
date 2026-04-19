@@ -1,5 +1,5 @@
 import { ZodValidationPipe } from 'src/common/pipes/zod-validation.pipe';
-import { Body, Controller, Query, Sse } from '@nestjs/common';
+import { Controller, Query, Req, Sse } from '@nestjs/common';
 import type { QuestionDto } from './dto/post-question.dto';
 import { QuestionZodDto } from './dto/post-question.dto';
 import { QueryService } from './query.service';
@@ -10,8 +10,8 @@ export class QueryController {
   constructor(private readonly queryService: QueryService) {}
 
   @Sse('question')
-  async question(@Query(new ZodValidationPipe(QuestionZodDto.schema)) query: QuestionDto): Promise<Observable<MessageEvent>> {
-    const stream = (await this.queryService.processQuestion(query)) as Observable<  string>;
+  async question(@Query(new ZodValidationPipe(QuestionZodDto.schema)) query: QuestionDto,  @Req() request: Request & { requestId: string }): Promise<Observable<MessageEvent>> {
+    const stream = (await this.queryService.processQuestion(query, request.requestId)) as Observable<  string>;
 
     return stream.pipe(
       map((token) => ({

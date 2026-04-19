@@ -4,6 +4,7 @@ import { MonitoringModule } from './common/monitoring/monitoring.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ComposerModule } from './modules/composer/composer.module';
 import { DatabaseModule } from './common/database/database.module';
+import { MetricsModule } from './common/metrics/metrics.module';
 import { CachingModule } from './modules/cache/cache.module';
 import { QueryModule } from './modules/query/query.module';
 import { CacheModule } from '@nestjs/cache-manager';
@@ -24,6 +25,7 @@ import { ConfigModule } from '@nestjs/config';
     MonitoringModule,
     ComposerModule,
     DatabaseModule,
+    MetricsModule,
     CachingModule,
     QueryModule,
   ],

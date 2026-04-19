@@ -1,13 +1,17 @@
-// src/modules/composer/composer.service.ts
+import { MetricsService } from 'src/common/metrics/metrics.service';
 import { Injectable } from '@nestjs/common';
 import { Observable, Subject } from 'rxjs';
+import { PipelineError } from 'src/common/errors/pipeline-error';
 
 @Injectable()
 export class ComposerService {
   private readonly baseUrl = process.env.LLM_BASE_URL;
   private readonly model = process.env.LLM_MODEL;
+  constructor(
+    private readonly metricsService: MetricsService,
+  ) {}
 
-  compose(question: string, data: unknown[]): Observable<string> {
+  compose(question: string, data: unknown[], requestId: string): Observable<string> {
     const subject = new Subject<string>();
 
     const prompt = `
@@ -21,6 +25,7 @@ export class ComposerService {
         ${JSON.stringify(data, null, 2)}
     `;
 
+    const compositionTimer = this.metricsService.time();
     fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -34,6 +39,12 @@ export class ComposerService {
         stream: true,
       }),
     }).then(async (response) => {
+      this.metricsService.write({ requestId, event: 'composition_response_received', durationMs: compositionTimer() });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new PipelineError('llm_composition', new Error(`LLM composition failed: ${response.status} ${response.statusText} - ${errorText}`));
+      }
+      
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
 
@@ -55,6 +66,7 @@ export class ComposerService {
 
           if (json === '[DONE]') {
             subject.complete();
+            this.metricsService.write({ requestId, event: 'composition_completed', durationMs: compositionTimer() });
             return;
           }
 
