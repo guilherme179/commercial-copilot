@@ -4,7 +4,9 @@ import { MonitoringModule } from './common/monitoring/monitoring.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ComposerModule } from './modules/composer/composer.module';
 import { DatabaseModule } from './common/database/database.module';
+import { CachingModule } from './modules/cache/cache.module';
 import { QueryModule } from './modules/query/query.module';
+import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
@@ -13,11 +15,16 @@ import { ConfigModule } from '@nestjs/config';
       envFilePath: '.env',
       isGlobal: true,
     }),
+    CacheModule.register({
+      isGlobal: true,
+      ttl: 86400
+    }),
     QueryValidatorModule,
     InterpreterModule,
     MonitoringModule,
     ComposerModule,
     DatabaseModule,
+    CachingModule,
     QueryModule,
   ],
 })
