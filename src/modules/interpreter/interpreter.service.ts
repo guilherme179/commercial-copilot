@@ -60,6 +60,11 @@ export class InterpreterService {
         });
 
         const data = await response.json();
+        
+        if (!data.choices?.[0]?.message?.content) {
+            throw new Error(`LLM returned unexpected response: ${JSON.stringify(data)}`);
+        }
+
         return this.sanitizeSQL(data.choices[0].message.content);
     }
 }

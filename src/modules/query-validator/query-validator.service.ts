@@ -9,16 +9,20 @@ export class QueryValidatorService {
     ];
 
     validate(sql: string): void {
-        const normalized = sql.toUpperCase().trim();
+        const normalized = sql
+            .replace(/--.*$/gm, '')    // remove comentários de linha
+            .replace(/\/\*[\s\S]*?\*\//g, '') // remove comentários de bloco
+            .trim()
+            .toUpperCase();
 
         if (!normalized.startsWith('SELECT')) {
             throw new BadRequestException('Only SELECT queries are allowed');
         }
 
         for (const word of this.FORBIDDEN) {
-        if (normalized.includes(word)) {
-            throw new BadRequestException(`Forbidden operation detected: ${word}`);
-        }
+            if (normalized.includes(word)) {
+                throw new BadRequestException(`Forbidden operation detected: ${word}`);
+            }
         }
 
         if (!normalized.includes('LIMIT')) {

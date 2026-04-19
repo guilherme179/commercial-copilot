@@ -9,16 +9,16 @@ export class EmbeddingService {
 
     async embed(text: string): Promise<number[]> {
         const response = await fetch(`${this.baseUrl}/embeddings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            model: this.model,
-            input: text.toLowerCase().trim(),
-        }),
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: this.model,
+                input: text.toLowerCase().trim(),
+            }),
         });
 
         if (!response.ok) {
-        throw new Error(`Embedding failed: ${response.statusText}`);
+            throw new Error(`Embedding failed: ${response.statusText}`);
         }
 
         const data = await response.json();
