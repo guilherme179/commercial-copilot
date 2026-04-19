@@ -29,6 +29,12 @@ export class RequestLoggingInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest();
     const response = context.switchToHttp().getResponse();
     request.requestId = requestId;
+    
+    const isSse = request.headers['accept'] === 'text/event-stream';
+
+    if (isSse) {
+      return next.handle(); // sem tap — evita log por token
+    }
 
     return next.handle().pipe(
       tap({

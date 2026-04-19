@@ -13,6 +13,7 @@ import { catchError } from 'rxjs/operators';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
+import { PipelineError } from '../errors/pipeline-error';
 
 @Injectable()
 export class ErrorLoggingInterceptor implements NestInterceptor {
@@ -62,12 +63,23 @@ export class ErrorLoggingInterceptor implements NestInterceptor {
   }
 
   private buildErrorDetails(error: any, request: any, errorId: string, now: Date) {
+    const isPipelineError = error instanceof PipelineError;
+    const causeDetails = isPipelineError ? error.getCauseDetails() : null;
+
     return {
       errorId,
       errorType: error.constructor.name,
-      message: error.message,
+      ...(isPipelineError
+        ? {
+            stage: error.stage,
+            causeDetails,  // tudo que precisa saber está aqui
+          }
+        : {
+            message: error.message,
+            stack: error.stack,
+          }
+      ),
       timestamp: now.toISOString(),
-      stack: error.stack,
       httpStatus: error instanceof HttpException ? error.getStatus() : 500,
       originalError: error instanceof HttpException ? error.getResponse() : null,
       context: {
