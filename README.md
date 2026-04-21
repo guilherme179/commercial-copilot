@@ -177,6 +177,12 @@ Troca para produção:
 2. Ajustar LLM_MODEL e EMBEDDING_MODEL.
 3. Sem necessidade de reestruturar os módulos de negócio.
 
+### Encerrando o servidor
+
+O servidor fecha conexões MySQL e Redis de forma controlada ao receber SIGTERM:
+- Pool MySQL encerra conexões ativas
+- Cliente Redis desconecta limpo
+
 ## Como Rodar Localmente
 
 ### Pré-requisitos
@@ -249,6 +255,11 @@ npm run test:cov
 ```bash
 curl.exe -X GET "http://localhost:3000/query/question?question=Quais+sao+os+ultimos+pedidos+da+minha+carteira&employeeId=1" -N
 ```
+
+### Demo visual do streaming
+
+Abra o arquivo `test.html` na raiz do projeto diretamente no navegador.
+Não requer instalação adicional — conecta via SSE e exibe tokens em tempo real.
 
 ## Cobertura De Testes Atual
 
