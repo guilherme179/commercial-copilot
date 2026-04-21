@@ -45,6 +45,12 @@ export class CacheService implements OnModuleInit {
         });
     }
 
+    async onModuleDestroy() {
+        if (this.client) {
+            await this.client.quit().catch(() => {});
+        }
+    }
+
     async get(question: string, employeeId: string): Promise<string | null> {
         if (!this.available) return null;
         const vector = await this.embeddingService.embed(question);
