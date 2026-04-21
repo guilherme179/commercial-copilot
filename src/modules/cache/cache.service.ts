@@ -1,5 +1,5 @@
 // src/modules/cache/cache.service.ts
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { EmbeddingService } from './embedding.service';
 import { createClient } from 'redis';
 
@@ -9,35 +9,44 @@ const TTL_SECONDS = 14400;
 @Injectable()
 export class CacheService implements OnModuleInit {
     private client!: ReturnType<typeof createClient>;
+    private available = false;
+    private readonly logger = new Logger(CacheService.name);
     
     constructor(
         private readonly embeddingService: EmbeddingService,
     ) {}
 
     async onModuleInit() {
-        this.client = createClient({ url: process.env.REDIS_URL });
-        await this.client.connect();
+        this.client = createClient({
+            url: process.env.REDIS_URL,
+            socket: {
+                reconnectStrategy: (retries) => {
+                    const delay = Math.min(retries * 1000, 30000);
+                    return delay;
+                },
+            },
+        });
 
-        // cria o índice vetorial se não existir
-        try {
-        await this.client.sendCommand([
-            'FT.CREATE', 'sql_cache',
-            'ON', 'HASH',
-            'PREFIX', '1', 'cache:',
-            'SCHEMA',
-            'vector', 'VECTOR', 'FLAT', '6',
-            'TYPE', 'FLOAT32',
-            'DIM', '768',
-            'DISTANCE_METRIC', 'COSINE',
-            'sql', 'TEXT',
-            'employeeId', 'TAG',
-        ]);
-        } catch {
-        // índice já existe — ignora
-        }
+        this.client.on('error', (err) => {
+            if (this.available) {
+                this.logger.warn(`Redis error — cache disabled: ${err.message}`);
+                this.available = false;
+            }
+        });
+
+        this.client.on('ready', () => {
+            this.logger.log('Redis connected — cache enabled');
+            this.available = true;
+        });
+
+        // não await — deixa conectar em background
+        this.client.connect().catch(() => {
+            this.logger.warn('Redis unavailable on startup — cache disabled, system running without cache');
+        });
     }
 
     async get(question: string, employeeId: string): Promise<string | null> {
+        if (!this.available) return null;
         const vector = await this.embeddingService.embed(question);
         const buffer = this.toBuffer(vector);
 
@@ -70,6 +79,7 @@ export class CacheService implements OnModuleInit {
     }
 
     async set(question: string, employeeId: string, sql: string): Promise<void> {
+        if (!this.available) return;
         const vector = await this.embeddingService.embed(question);
         const buffer = this.toBuffer(vector);
         const key = `cache:${Date.now()}`;
