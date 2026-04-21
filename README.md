@@ -130,9 +130,12 @@ QueryValidatorService aplica:
 ### Logs estruturados em arquivo
 
 Diretório logs:
-1. request_log_YYYY-MM-DD.log
+1. request_log_YYYY-MM-DD.log (somente requests não-SSE)
 2. error_log_YYYY-MM-DD.log
 3. metrics_YYYY-MM-DD.log
+
+Observação importante:
+1. O endpoint principal /query/question usa SSE e é intencionalmente ignorado no RequestLoggingInterceptor para evitar ruído de logging por token de stream.
 
 ### Erros por estágio
 
@@ -159,7 +162,8 @@ QueryService e ComposerService registram eventos como:
 
 1. MonitoringModule registra SentryInterceptor globalmente.
 2. Erros não-HTTP são enviados via captureError.
-3. Existem variáveis de configuração para sample rate e traces.
+3. A integração está preparada, mas para envio efetivo é necessário inicializar o SDK com initSentry no bootstrap e configurar SENTRY_DSN.
+4. Existem variáveis de configuração para sample rate e traces.
 
 ## Stack De LLM
 
