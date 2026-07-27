@@ -1,8 +1,16 @@
 # Commercial Copilot
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?logo=nestjs&logoColor=white)](https://nestjs.com/)
+[![MySQL](https://img.shields.io/badge/MySQL-3-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com/)
+[![Redis](https://img.shields.io/badge/Redis-5-FF4438?logo=redis&logoColor=white)](https://redis.io/)
+[![Sentry](https://img.shields.io/badge/Sentry-10-362D59?logo=sentry&logoColor=white)](https://sentry.io/)
+[![Jest](https://img.shields.io/badge/Jest-30-C21325?logo=jest&logoColor=white)](https://jestjs.io/)
+[![Zod](https://img.shields.io/badge/Zod-4-3E67B1?logo=zod&logoColor=white)](https://zod.dev/)
 
 Copiloto comercial para gerentes de carteira que transforma perguntas em linguagem natural em respostas em português baseadas em dados reais do banco.
 
-O objetivo da entrega é demonstrar uma arquitetura modular, segura e observável para o fluxo NL2SQL + composição de resposta com streaming.
+Construído para explorar uma arquitetura modular, segura e observável para o fluxo NL2SQL + composição de resposta com streaming — com foco em decisões que fariam sentido em um ambiente de produção real.
 
 ## Visão Geral E Contexto
 
@@ -278,11 +286,11 @@ Testes implementados hoje:
 
 Escopo atual de testes:
 1. Cobertura focada em componentes fundamentais de segurança e observabilidade.
-2. Ainda sem suíte abrangente para todo o fluxo de integração end-to-end.
+2. Expansão para fluxo de integração end-to-end está planejada como próximo passo.
 
 ## Simplificações Deliberadas De Escopo
 
-Para manter a entrega objetiva e auditável no prazo da avaliação, foram feitos recortes conscientes:
+Para manter o escopo objetivo e o código auditável, alguns recortes foram feitos conscientemente:
 
 1. Mensageria assíncrona
         O fluxo atual é síncrono no request; RabbitMQ não foi incluído nesta versão.
@@ -340,4 +348,4 @@ Observação:
 Guilherme Souza Santos  
 Backend Engineer - Node.js | TypeScript | NestJS
 
-[LinkedIn](https://linkedin.com/in/guilherme-souza-414472219) · [Portfolio](https://guilhermedev.website)
+[LinkedIn](https://linkedin.com/in/guilherme-souza-414472219) · [Portfolio](https://guilhermedev.com)
