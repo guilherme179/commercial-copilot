@@ -181,8 +181,8 @@ Implementação atual:
 3. EMBEDDING_MODEL para geração de embeddings.
 
 Ambiente local:
-1. LM Studio com modelo local reduz dependência externa durante avaliação.
-2. Reproduzibilidade de testes técnicos sem custo de API de produção.
+1. LM Studio com modelo local reduz dependência externa durante desenvolvimento.
+2. Permite reproduzir o pipeline localmente sem custo de API.
 
 Troca para produção:
 1. Ajustar LLM_BASE_URL.
@@ -275,7 +275,7 @@ Não requer instalação adicional — conecta via SSE e exibe tokens em tempo r
 
 ## Cobertura De Testes Atual
 
-Testes implementados hoje:
+Testes implementados:
 
 1. PipelineError
         Verifica stage, mensagem e detalhes de causa.
